@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "author": "EdgeBot Reflex Project",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "ultrasonic",
+      "top": -120,
+      "left": 200,
+      "attrs": { "distance": "20" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_danger",
+      "top": -100,
+      "left": 380,
+      "attrs": { "color": "red", "label": "DANGER" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_ok",
+      "top": -60,
+      "left": 380,
+      "attrs": { "color": "green", "label": "OK" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_plan",
+      "top": -20,
+      "left": 380,
+      "attrs": { "color": "blue", "label": "PLAN" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -100,
+      "left": 340,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": -60,
+      "left": 340,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r3",
+      "top": -20,
+      "left": 340,
+      "attrs": { "value": "220" }
+    }
+  ],
+  "connections": [
+    ["esp:5V", "ultrasonic:VCC", "red", []],
+    ["esp:GND.1", "ultrasonic:GND", "black", []],
+    ["esp:D26", "ultrasonic:TRIG", "orange", []],
+    ["esp:D27", "ultrasonic:ECHO", "yellow", []],
+
+    ["esp:D2", "r1:1", "red", []],
+    ["r1:2", "led_danger:A", "red", []],
+    ["led_danger:C", "esp:GND.2", "black", []],
+
+    ["esp:D4", "r2:1", "green", []],
+    ["r2:2", "led_ok:A", "green", []],
+    ["led_ok:C", "esp:GND.2", "black", []],
+
+    ["esp:D5", "r3:1", "blue", []],
+    ["r3:2", "led_plan:A", "blue", []],
+    ["led_plan:C", "esp:GND.2", "black", []]
+  ]
+}
