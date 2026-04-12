@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>EdgeBot Reflex — Live Dashboard</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:system-ui,sans-serif;background:#0f1117;color:#e2e8f0;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+  .topbar{background:#1a1d27;border-bottom:1px solid #2d3148;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .topbar-title{font-size:13px;font-weight:600;color:#a78bfa;letter-spacing:.04em;}
+  .topbar-sub{font-size:11px;color:#64748b;}
+  .badge{font-size:10px;padding:2px 8px;border-radius:99px;font-weight:500;}
+  .badge-green{background:#14532d;color:#4ade80;}
+  .badge-red{background:#450a0a;color:#f87171;}
+  .badge-blue{background:#0c1a3d;color:#60a5fa;}
+  .main{flex:1;display:grid;grid-template-columns:200px 1fr 240px;gap:1px;background:#2d3148;overflow:hidden;}
+  .col{background:#0f1117;overflow:hidden;display:flex;flex-direction:column;}
+  .col-hdr{background:#1a1d27;padding:8px 12px;font-size:10px;font-weight:600;color:#64748b;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #2d3148;flex-shrink:0;}
+
+  /* ── LEFT: ESP32 ── */
+  .esp-wrap{padding:10px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;}
+  .board-svg-wrap{background:#1a1d27;border-radius:8px;padding:8px;border:1px solid #2d3148;}
+  .led-section{display:flex;flex-direction:column;gap:5px;}
+  .led-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;border:1px solid #2d3148;background:#1a1d27;}
+  .led-dot{width:12px;height:12px;border-radius:50%;border:1px solid #333;flex-shrink:0;transition:background .15s,box-shadow .15s;}
+  .led-dot.red-on{background:#ef4444;box-shadow:0 0 8px #ef4444;}
+  .led-dot.grn-on{background:#22c55e;box-shadow:0 0 8px #22c55e;}
+  .led-dot.blu-on{background:#3b82f6;box-shadow:0 0 8px #3b82f6;}
+  .led-dot.off{background:#1e293b;}
+  .led-lbl{font-size:11px;color:#94a3b8;flex:1;}
+  .led-state{font-size:10px;font-weight:600;color:#475569;}
+  .pin-table{width:100%;border-collapse:collapse;font-size:10px;}
+  .pin-table td{padding:3px 4px;border-bottom:1px solid #1e293b;color:#64748b;}
+  .pin-table td:last-child{text-align:right;font-weight:600;font-family:monospace;}
+  .pin-high{color:#22c55e;}
+  .pin-low{color:#475569;}
+  .section-lbl{font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+
+  /* ── CENTRE: simulation ── */
+  .sim-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  #sim-canvas{width:100%;flex:1;display:block;}
+  .sim-controls{background:#1a1d27;border-top:1px solid #2d3148;padding:8px 12px;flex-shrink:0;}
+  .ctrl-row{display:flex;align-items:center;gap:10px;}
+  .ctrl-lbl{font-size:11px;color:#64748b;white-space:nowrap;}
+  .ctrl-row input[type=range]{flex:1;accent-color:#a78bfa;}
+  .ctrl-val{font-size:12px;font-weight:600;color:#e2e8f0;min-width:50px;text-align:right;}
+  .ctrl-btn{background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;}
+  .ctrl-btn:hover{background:#273344;color:#e2e8f0;}
+  .ctrl-btn.active{background:#312e81;border-color:#4f46e5;color:#a78bfa;}
+
+  /* ── RIGHT: data ── */
+  .data-wrap{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;}
+  .card{background:#1a1d27;border:1px solid #2d3148;border-radius:8px;padding:10px;}
+  .card-lbl{font-size:10px;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em;}
+  .card-val{font-size:22px;font-weight:700;}
+  .val-danger{color:#ef4444;}
+  .val-caution{color:#f59e0b;}
+  .val-safe{color:#22c55e;}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .bar-wrap{margin:4px 0;}
+  .bar-bg{height:5px;background:#1e293b;border-radius:3px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:3px;transition:width .3s,background .3s;}
+  .model-block{background:#0f1117;border:1px solid #2d3148;border-radius:6px;padding:8px;}
+  .model-name{font-size:10px;color:#64748b;margin-bottom:3px;}
+  .model-cmd{font-size:14px;font-weight:700;font-family:monospace;}
+  .cmd-stop{color:#ef4444;}
+  .cmd-move{color:#22c55e;}
+  .cmd-plan{color:#60a5fa;}
+  .cmd-neutral{color:#94a3b8;}
+  .arbiter-card{background:#1e1b4b;border:1px solid #4338ca;border-radius:8px;padding:10px;}
+  .arbiter-lbl{font-size:10px;color:#818cf8;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;}
+  .arbiter-val{font-size:16px;font-weight:700;font-family:monospace;}
+  .log-box{background:#0a0a0f;border:1px solid #1e293b;border-radius:6px;padding:8px;font-size:10px;font-family:monospace;color:#475569;line-height:1.7;overflow:hidden;max-height:110px;}
+  .log-line-new{color:#64748b;}
+  .dist-scale{display:flex;justify-content:space-between;font-size:9px;color:#334155;margin-top:2px;}
+  .zone-marks{display:flex;height:3px;border-radius:2px;overflow:hidden;margin-bottom:2px;}
+  .zone-d{flex:0 0 12.5%;background:#7f1d1d;}
+  .zone-c{flex:0 0 12.5%;background:#78350f;}
+  .zone-s{flex:1;background:#14532d;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">EdgeBot Reflex — Live Dashboard</div>
+    <div class="topbar-sub">SmolVLA (planning) + Falcon Mamba (reflex) · wokwi.ino v2</div>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <span class="badge badge-green" id="badge-status">RUNNING</span>
+    <span class="badge badge-blue" id="badge-mode">FakeSerial</span>
+    <span style="font-size:11px;color:#475569;" id="badge-ts">ts: 0ms</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ══════════ LEFT: ESP32 ══════════ -->
+  <div class="col">
+    <div class="col-hdr">ESP32 DevKit v1</div>
+    <div class="esp-wrap">
+
+      <div class="board-svg-wrap">
+        <svg width="100%" viewBox="0 0 160 220" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="8" width="144" height="204" rx="8" fill="#1a3320" stroke="#2d5a32" stroke-width="1.5"/>
+          <rect x="18" y="18" width="124" height="90" rx="4" fill="#0d2010" stroke="#1e4020" stroke-width=".5"/>
+          <text x="80" y="44" text-anchor="middle" fill="#3d8a4a" font-size="9" font-family="monospace" font-weight="bold">ESP32</text>
+          <text x="80" y="56" text-anchor="middle" fill="#2a5a30" font-size="7" font-family="monospace">DevKit v1</text>
+          <rect x="50" y="62" width="60" height="30" rx="3" fill="#0a0a1e" stroke="#222244" stroke-width=".5"/>
+          <text x="80" y="80" text-anchor="middle" fill="#3355aa" font-size="6" font-family="monospace">Xtensa LX6</text>
+          <text x="80" y="88" text-anchor="middle" fill="#223366" font-size="5" font-family="monospace">240MHz dual core</text>
+          <rect x="25" y="66" width="7" height="4" rx="1" fill="#bb7700"/>
+          <rect x="25" y="74" width="7" height="4" rx="1" fill="#bb7700"/>
+          <rect x="25" y="82" width="7" height="4" rx="1" fill="#bb7700"/>
+          <rect x="128" y="66" width="7" height="4" rx="1" fill="#bb7700"/>
+          <rect x="128" y="74" width="7" height="4" rx="1" fill="#bb7700"/>
+          <rect x="128" y="82" width="7" height="4" rx="1" fill="#bb7700"/>
+          <circle id="bl-r" cx="38" cy="130" r="9" fill="#2a0000" stroke="#550000" stroke-width=".5"/>
+          <circle id="bl-g" cx="80" cy="130" r="9" fill="#002a00" stroke="#005500" stroke-width=".5"/>
+          <circle id="bl-b" cx="122" cy="130" r="9" fill="#00002a" stroke="#000055" stroke-width=".5"/>
+          <text x="38"  y="147" text-anchor="middle" fill="#553333" font-size="6" font-family="monospace">D2</text>
+          <text x="80"  y="147" text-anchor="middle" fill="#335533" font-size="6" font-family="monospace">D4</text>
+          <text x="122" y="147" text-anchor="middle" fill="#333355" font-size="6" font-family="monospace">D5</text>
+          <rect x="44" y="158" width="72" height="20" rx="3" fill="#111" stroke="#333" stroke-width=".5"/>
+          <circle cx="60" cy="168" r="6" fill="#0a0a0a" stroke="#444" stroke-width=".5"/>
+          <circle cx="100" cy="168" r="6" fill="#0a0a0a" stroke="#444" stroke-width=".5"/>
+          <text x="80" y="171" text-anchor="middle" fill="#555" font-size="6" font-family="monospace">HC-SR04</text>
+          <rect x="44" y="182" width="72" height="10" rx="2" fill="#1a1a1a" stroke="#2d2d2d" stroke-width=".5"/>
+          <text x="80" y="190" text-anchor="middle" fill="#334" font-size="6" font-family="monospace">GPIO26·27 TRIG·ECHO</text>
+          <rect id="trig-line" x="60" y="192" width="4" height="6" rx="1" fill="#334"/>
+        </svg>
+      </div>
+
+      <div>
+        <div class="section-lbl">LEDs</div>
+        <div class="led-section">
+          <div class="led-row">
+            <div class="led-dot off" id="led-r"></div>
+            <span class="led-lbl">GPIO2 · DANGER</span>
+            <span class="led-state" id="led-r-state">LOW</span>
+          </div>
+          <div class="led-row">
+            <div class="led-dot off" id="led-g"></div>
+            <span class="led-lbl">GPIO4 · OK</span>
+            <span class="led-state" id="led-g-state">LOW</span>
+          </div>
+          <div class="led-row">
+            <div class="led-dot off" id="led-b"></div>
+            <span class="led-lbl">GPIO5 · PLAN</span>
+            <span class="led-state" id="led-b-state">LOW</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-lbl">Pin states</div>
+        <table class="pin-table">
+          <tr><td>GPIO26 TRIG</td><td id="p-trig" class="pin-low">LOW</td></tr>
+          <tr><td>GPIO27 ECHO</td><td id="p-echo" class="pin-low">LOW</td></tr>
+          <tr><td>GPIO2  RED</td> <td id="p-r"    class="pin-low">LOW</td></tr>
+          <tr><td>GPIO4  GRN</td> <td id="p-g"    class="pin-low">LOW</td></tr>
+          <tr><td>GPIO5  BLU</td> <td id="p-b"    class="pin-low">LOW</td></tr>
+        </table>
+      </div>
+
+      <div>
+        <div class="section-lbl">Firmware</div>
+        <div style="font-size:10px;color:#475569;line-height:1.8;">
+          <div>SENSOR_MS: <span style="color:#94a3b8;">50ms</span></div>
+          <div>SMOLVLA_MS: <span style="color:#94a3b8;">500ms</span></div>
+          <div>DANGER_CM: <span style="color:#ef4444;">15.0</span></div>
+          <div>CAUTION_CM: <span style="color:#f59e0b;">30.0</span></div>
+          <div>HISTORY: <span style="color:#94a3b8;">10 samples</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════ CENTRE: simulation ══════════ -->
+  <div class="col">
+    <div class="col-hdr">Vehicle simulation</div>
+    <div class="sim-wrap">
+      <canvas id="sim-canvas"></canvas>
+      <div class="sim-controls">
+        <div class="ctrl-row" style="margin-bottom:6px;">
+          <span class="ctrl-lbl">Obstacle distance</span>
+          <input type="range" id="dist-slider" min="2" max="120" step="1" value="80" oninput="manualDist(+this.value)">
+          <span class="ctrl-val" id="dist-disp">80 cm</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Mode</span>
+          <button class="ctrl-btn active" id="btn-auto" onclick="setMode('auto')">Auto simulate</button>
+          <button class="ctrl-btn" id="btn-manual" onclick="setMode('manual')">Manual slider</button>
+          <span class="ctrl-lbl" style="margin-left:8px;">Speed</span>
+          <input type="range" id="speed-slider" min="1" max="5" step="1" value="2" style="width:60px;">
+          <span class="ctrl-val" id="speed-disp">2x</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ RIGHT: data ══════════ -->
+  <div class="col">
+    <div class="col-hdr">Live data</div>
+    <div class="data-wrap">
+
+      <div class="metrics">
+        <div class="card">
+          <div class="card-lbl">Distance</div>
+          <div class="card-val val-safe" id="d-dist">80.0 cm</div>
+        </div>
+        <div class="card">
+          <div class="card-lbl">Zone</div>
+          <div class="card-val val-safe" id="d-zone">SAFE</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl">Distance bar</div>
+        <div class="zone-marks">
+          <div class="zone-d"></div>
+          <div class="zone-c"></div>
+          <div class="zone-s"></div>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fill" id="dist-bar" style="width:66%;background:#22c55e;"></div>
+        </div>
+        <div class="dist-scale"><span>0</span><span>15</span><span>30</span><span>120 cm</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl" style="margin-bottom:6px;">Model decisions</div>
+        <div class="model-block" style="margin-bottom:5px;">
+          <div class="model-name">Falcon Mamba · fast reflex (50ms)</div>
+          <div class="model-cmd cmd-neutral" id="d-mamba">FWD</div>
+        </div>
+        <div class="model-block">
+          <div class="model-name">SmolVLA · planning (500ms)</div>
+          <div class="model-cmd cmd-neutral" id="d-plan">PLAN_FWD</div>
+        </div>
+      </div>
+
+      <div class="arbiter-card">
+        <div class="arbiter-lbl">Arbiter — final command</div>
+        <div class="arbiter-val cmd-neutral" id="d-arbiter">PLAN_FWD</div>
+      </div>
+
+      <div class="card">
+        <div class="card-lbl" style="margin-bottom:5px;">Timing</div>
+        <div style="font-size:10px;color:#64748b;line-height:2;">
+          <div>Mamba latency: <span style="color:#94a3b8;" id="d-mamba-lat">0.0 ms</span></div>
+          <div>SmolVLA latency: <span style="color:#94a3b8;" id="d-plan-lat">0.0 ms</span></div>
+          <div>Sensor tick: <span style="color:#94a3b8;" id="d-tick">0</span></div>
+          <div>Approaching: <span id="d-approach" style="color:#f59e0b;">NO</span></div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:8px;">
+        <div class="card-lbl" style="margin-bottom:5px;">Serial output · wokwi.ino</div>
+        <div class="log-box" id="log-box"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// EXACT MIRROR OF wokwi.ino logic
+// Constants match firmware defines
+// ════════════════════════════════════════════════════════
+const DANGER_CM    = 15.0;
+const CAUTION_CM   = 30.0;
+const SENSOR_MS    = 50;
+const SMOLVLA_MS   = 500;
+const HISTORY_LEN  = 10;
+
+let distHistory = [];
+let histCount   = 0;
+
+function pushHistory(d) {
+  distHistory.push(d);
+  if (distHistory.length > HISTORY_LEN) distHistory.shift();
+  histCount = distHistory.length;
+}
+
+function historyAt(stepsAgo) {
+  if (stepsAgo >= histCount) return 400;
+  return distHistory[histCount - 1 - stepsAgo];
+}
+
+function isApproaching() {
+  if (histCount < 4) return false;
+  return historyAt(0) < historyAt(3);
+}
+
+// mirror of mambaReflex() in wokwi.ino
+function mambaReflex(d) {
+  if (d < DANGER_CM) return 'STOP';
+  if (d < CAUTION_CM) {
+    if (isApproaching()) {
+      const recent = historyAt(0);
+      const older  = historyAt(3);
+      if ((recent - older) < -5.0) return 'LEFT';
+      return 'RIGHT';
+    }
+  }
+  return 'FWD';
+}
+
+// mirror of smolvlaPlan() in wokwi.ino
+function smolvlaPlan(d) {
+  if (d < DANGER_CM) return 'PLAN_STOP';
+  if (d < CAUTION_CM) {
+    if (isApproaching()) return 'PLAN_LEFT';
+    return 'PLAN_FWD';
+  }
+  return 'PLAN_FWD';
+}
+
+// mirror of arbitrate() in wokwi.ino
+function arbitrate(d, m, p) {
+  if (m === 'STOP') return 'STOP';
+  if (d < CAUTION_CM) return m;
+  return p;
+}
+
+// ════════════════════════════════════════════════════════
+// FAKE SERIAL — mirrors edgebot_bridge.py FakeSerial
+// ════════════════════════════════════════════════════════
+let fakeDist  = 80;
+let fakeDir   = -1;
+let mode      = 'auto';  // 'auto' | 'manual'
+let manualDistVal = 80;
+let speedMult = 2;
+
+function fakeSerialTick() {
+  if (mode === 'auto') {
+    fakeDist += fakeDir * (Math.random() * 3 + 1) * speedMult;
+    if (fakeDist < 4)   { fakeDist = 4;   fakeDir =  1; }
+    if (fakeDist > 120) { fakeDist = 120; fakeDir = -1; }
+    document.getElementById('dist-slider').value = Math.round(fakeDist);
+    document.getElementById('dist-disp').textContent = fakeDist.toFixed(1) + ' cm';
+  } else {
+    fakeDist = manualDistVal;
+  }
+  return fakeDist;
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-auto').classList.toggle('active', m==='auto');
+  document.getElementById('btn-manual').classList.toggle('active', m==='manual');
+}
+
+function manualDist(v) {
+  manualDistVal = v;
+  fakeDist = v;
+  document.getElementById('dist-disp').textContent = v + ' cm';
+}
+
+document.getElementById('speed-slider').oninput = function() {
+  speedMult = +this.value;
+  document.getElementById('speed-disp').textContent = this.value + 'x';
+};
+
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+let mambaCmd = 'FWD';
+let planCmd  = 'PLAN_FWD';
+let arbCmd   = 'PLAN_FWD';
+let tickN    = 0;
+let tsMs     = 0;
+let lastSmolVLATs = 0;
+let logLines = [];
+let mambaLat = 0;
+let planLat  = 0;
+
+// ════════════════════════════════════════════════════════
+// CANVAS SIMULATION
+// ════════════════════════════════════════════════════════
+const canvas = document.getElementById('sim-canvas');
+const ctx    = canvas.getContext('2d');
+let W, H;
+let robotX, robotY, robotAngle = -Math.PI/2;
+let trail = [];
+let obstacles = []; // walls
+let beamAlpha = 0;
+
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  W = canvas.width  = rect.width;
+  H = canvas.height = rect.height - 70;
+  robotX = W/2; robotY = H - 60;
+}
+
+function cmdColor(cmd) {
+  if (cmd==='STOP'||cmd==='PLAN_STOP') return '#ef4444';
+  if (cmd.startsWith('PLAN_')) return '#3b82f6';
+  return '#22c55e';
+}
+
+function drawSim() {
+  ctx.fillStyle = '#080c10';
+  ctx.fillRect(0,0,W,H);
+
+  // road
+  ctx.fillStyle = '#111820';
+  const rw = 160, rx = (W-rw)/2;
+  ctx.fillRect(rx,0,rw,H);
+  ctx.strokeStyle = '#1e3a2a';
+  ctx.lineWidth=1;
+  ctx.fillStyle='#1a2a1a';
+  ctx.fillRect(0,0,W,H);
+
+  // lane lines
+  ctx.strokeStyle='#1e3a22';
+  ctx.setLineDash([20,20]);
+  ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle='#162a1a';
+  ctx.lineWidth=1;
+  for(let x=0;x<W;x+=80){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<H;y+=80){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // obstacle wall
+  const obsDist = fakeDist * 1.5;
+  const obsX = robotX + Math.cos(robotAngle) * obsDist;
+  const obsY = robotY + Math.sin(robotAngle) * obsDist;
+  const wallC = fakeDist < DANGER_CM ? '#7f1d1d' : fakeDist < CAUTION_CM ? '#78350f' : '#1e3a1e';
+  const wallStroke = fakeDist < DANGER_CM ? '#ef4444' : fakeDist < CAUTION_CM ? '#f59e0b' : '#22c55e';
+  ctx.fillStyle = wallC;
+  ctx.strokeStyle = wallStroke;
+  ctx.lineWidth = 2;
+  const wallW = Math.min(W*0.6, 200), wallH = 18;
+  ctx.beginPath();
+  ctx.roundRect(obsX - wallW/2, obsY - wallH/2, wallW, wallH, 4);
+  ctx.fill(); ctx.stroke();
+
+  // distance label on wall
+  ctx.fillStyle = wallStroke;
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(fakeDist.toFixed(1) + ' cm', obsX, obsY - wallH/2 - 6);
+
+  // sensor beam
+  if (fakeDist < 100) {
+    const alpha = Math.max(0, 0.6 - fakeDist/100*0.5);
+    ctx.strokeStyle = fakeDist < DANGER_CM
+      ? `rgba(239,68,68,${alpha})`
+      : fakeDist < CAUTION_CM
+      ? `rgba(245,158,11,${alpha})`
+      : `rgba(34,197,94,${alpha*0.6})`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5,5]);
+    ctx.beginPath();
+    ctx.moveTo(robotX + Math.cos(robotAngle)*16, robotY + Math.sin(robotAngle)*16);
+    ctx.lineTo(obsX, obsY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // cone
+    const spread = 12 * Math.PI/180;
+    ctx.strokeStyle = fakeDist < DANGER_CM ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.06)';
+    ctx.lineWidth=1;
+    for(let a=-spread;a<=spread;a+=spread/2){
+      ctx.beginPath();
+      ctx.moveTo(robotX,robotY);
+      ctx.lineTo(robotX+Math.cos(robotAngle+a)*obsDist, robotY+Math.sin(robotAngle+a)*obsDist);
+      ctx.stroke();
+    }
+  }
+
+  // trail
+  if(trail.length>1){
+    for(let i=1;i<trail.length;i++){
+      const a=i/trail.length;
+      ctx.strokeStyle=`rgba(${arbCmd==='STOP'?'239,68,68':arbCmd.startsWith('PLAN_')?'59,130,246':'34,197,94'},${a*0.4})`;
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.moveTo(trail[i-1].x,trail[i-1].y);
+      ctx.lineTo(trail[i].x,trail[i].y);
+      ctx.stroke();
+    }
+  }
+
+  // robot body
+  ctx.save();
+  ctx.translate(robotX,robotY);
+  ctx.rotate(robotAngle + Math.PI/2);
+
+  // body
+  ctx.fillStyle='#1e3a6e';
+  ctx.strokeStyle='#3b82f6';
+  ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.roundRect(-14,-20,28,36,4);
+  ctx.fill(); ctx.stroke();
+
+  // windshield
+  ctx.fillStyle='#0e2040';
+  ctx.strokeStyle='#1e4080';
+  ctx.lineWidth=0.5;
+  ctx.beginPath();
+  ctx.roundRect(-9,-18,18,12,2);
+  ctx.fill(); ctx.stroke();
+
+  // wheels
+  [[-14,-14],[14,-14],[-14,10],[14,10]].forEach(([wx,wy])=>{
+    ctx.fillStyle='#1a1a1a';
+    ctx.strokeStyle='#333';
+    ctx.lineWidth=0.5;
+    ctx.beginPath();
+    ctx.roundRect(wx-4,wy-5,8,10,2);
+    ctx.fill(); ctx.stroke();
+  });
+
+  // front sensor
+  ctx.fillStyle='#aad4ff';
+  ctx.fillRect(-6,-22,12,4);
+
+  // status LED on robot (mirrors arbiter)
+  ctx.fillStyle = cmdColor(arbCmd);
+  ctx.shadowColor = cmdColor(arbCmd);
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(0,-8,4,0,Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur=0;
+
+  ctx.restore();
+
+  // HUD overlay: command
+  ctx.fillStyle = cmdColor(arbCmd);
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(arbCmd, 10, 20);
+  ctx.fillStyle='#475569';
+  ctx.font='10px monospace';
+  ctx.fillText('tick:'+tickN, 10, 34);
+}
+
+function moveRobot() {
+  const spd = 1.0;
+  let moved = false;
+  if(arbCmd==='STOP'||arbCmd==='PLAN_STOP'){
+    // stopped
+  } else if(arbCmd==='LEFT'||arbCmd==='PLAN_LEFT'){
+    robotAngle -= 0.025;
+    robotX += Math.cos(robotAngle)*spd*0.4;
+    robotY += Math.sin(robotAngle)*spd*0.4;
+    moved=true;
+  } else if(arbCmd==='RIGHT'){
+    robotAngle += 0.025;
+    robotX += Math.cos(robotAngle)*spd*0.4;
+    robotY += Math.sin(robotAngle)*spd*0.4;
+    moved=true;
+  } else {
+    robotX += Math.cos(robotAngle)*spd;
+    robotY += Math.sin(robotAngle)*spd;
+    moved=true;
+  }
+  if(robotX<20) robotX=W-20;
+  if(robotX>W-20) robotX=20;
+  if(robotY<20) robotY=H-20;
+  if(robotY>H-20) robotY=20;
+  if(moved){ trail.push({x:robotX,y:robotY}); if(trail.length>80) trail.shift(); }
+}
+
+// ════════════════════════════════════════════════════════
+// UI UPDATE — mirrors applyLEDs() and Serial.print() in wokwi.ino
+// ════════════════════════════════════════════════════════
+function setPin(id,high){
+  const el=document.getElementById(id);
+  el.textContent=high?'HIGH':'LOW';
+  el.className=high?'pin-high':'pin-low';
+}
+
+function updateUI() {
+  const d = fakeDist;
+  const isStop  = arbCmd==='STOP';
+  const isMove  = arbCmd==='FWD'||arbCmd==='LEFT'||arbCmd==='RIGHT';
+  const isPlan  = arbCmd.startsWith('PLAN_');
+
+  // LEDs
+  const lr=document.getElementById('led-r');
+  const lg=document.getElementById('led-g');
+  const lb=document.getElementById('led-b');
+  lr.className='led-dot '+(isStop?'red-on':'off');
+  lg.className='led-dot '+(isMove?'grn-on':'off');
+  lb.className='led-dot '+(isPlan?'blu-on':'off');
+  document.getElementById('led-r-state').textContent=isStop?'HIGH':'LOW';
+  document.getElementById('led-g-state').textContent=isMove?'HIGH':'LOW';
+  document.getElementById('led-b-state').textContent=isPlan?'HIGH':'LOW';
+
+  // board LEDs
+  document.getElementById('bl-r').setAttribute('fill',isStop?'#cc0000':'#2a0000');
+  document.getElementById('bl-r').setAttribute('stroke',isStop?'#ff3333':'#550000');
+  document.getElementById('bl-g').setAttribute('fill',isMove?'#00aa00':'#002a00');
+  document.getElementById('bl-g').setAttribute('stroke',isMove?'#33ff33':'#005500');
+  document.getElementById('bl-b').setAttribute('fill',isPlan?'#0044ff':'#00002a');
+  document.getElementById('bl-b').setAttribute('stroke',isPlan?'#3388ff':'#000055');
+
+  // pins
+  setPin('p-trig', tickN%2===0);
+  setPin('p-echo', d < 400);
+  setPin('p-r', isStop);
+  setPin('p-g', isMove);
+  setPin('p-b', isPlan);
+
+  // data panel
+  const dStr = d.toFixed(1)+' cm';
+  const distEl = document.getElementById('d-dist');
+  distEl.textContent = dStr;
+  distEl.className = 'card-val '+(d<DANGER_CM?'val-danger':d<CAUTION_CM?'val-caution':'val-safe');
+
+  const zoneEl = document.getElementById('d-zone');
+  zoneEl.textContent = d<DANGER_CM?'DANGER':d<CAUTION_CM?'CAUTION':'SAFE';
+  zoneEl.className = 'card-val '+(d<DANGER_CM?'val-danger':d<CAUTION_CM?'val-caution':'val-safe');
+
+  const pct = Math.min(100,(d/120)*100).toFixed(1);
+  document.getElementById('dist-bar').style.width=pct+'%';
+  document.getElementById('dist-bar').style.background=d<DANGER_CM?'#ef4444':d<CAUTION_CM?'#f59e0b':'#22c55e';
+
+  function setCmd(id, cmd){
+    const el=document.getElementById(id);
+    el.textContent=cmd;
+    el.className='model-cmd '+(cmd==='STOP'||cmd==='PLAN_STOP'?'cmd-stop':cmd.startsWith('PLAN_')?'cmd-plan':'cmd-move');
+  }
+  setCmd('d-mamba', mambaCmd);
+  setCmd('d-plan', planCmd);
+  const aEl=document.getElementById('d-arbiter');
+  aEl.textContent=arbCmd;
+  aEl.className='arbiter-val '+(arbCmd==='STOP'||arbCmd==='PLAN_STOP'?'cmd-stop':arbCmd.startsWith('PLAN_')?'cmd-plan':'cmd-move');
+
+  document.getElementById('d-mamba-lat').textContent=mambaLat.toFixed(3)+' ms';
+  document.getElementById('d-plan-lat').textContent=planLat.toFixed(3)+' ms';
+  document.getElementById('d-tick').textContent=tickN;
+  document.getElementById('d-approach').textContent=isApproaching()?'YES':'NO';
+  document.getElementById('d-approach').style.color=isApproaching()?'#f59e0b':'#475569';
+
+  document.getElementById('badge-ts').textContent='ts: '+tsMs+'ms';
+
+  // Serial log — exact format from wokwi.ino Serial.print statements
+  const line=`{"dist":${d.toFixed(1)},"mamba":"${mambaCmd}","plan":"${planCmd}","cmd":"${arbCmd}","ts":${tsMs}}`;
+  logLines.push(line);
+  if(logLines.length>8) logLines.shift();
+  document.getElementById('log-box').textContent=logLines.join('\n');
+}
+
+// ════════════════════════════════════════════════════════
+// MAIN LOOP — runs at SENSOR_MS = 50ms like the firmware
+// ════════════════════════════════════════════════════════
+let lastSensorTs  = 0;
+let lastSmolVLATime = 0;
+let animId;
+
+function loop(now) {
+  animId = requestAnimationFrame(loop);
+  if (!lastSensorTs) lastSensorTs = now;
+
+  if (now - lastSensorTs >= SENSOR_MS) {
+    lastSensorTs = now;
+    tickN++;
+    tsMs = Math.round(now);
+
+    const d = fakeSerialTick();
+    pushHistory(d);
+
+    // Mamba reflex (fires every SENSOR_MS = 50ms)
+    const t0 = performance.now();
+    mambaCmd = mambaReflex(d);
+    mambaLat = performance.now() - t0;
+
+    // SmolVLA plan (fires every SMOLVLA_MS = 500ms)
+    if (now - lastSmolVLATime >= SMOLVLA_MS) {
+      lastSmolVLATime = now;
+      const t1 = performance.now();
+      planCmd = smolvlaPlan(d);
+      planLat = performance.now() - t1;
+    }
+
+    // Arbitrate
+    arbCmd = arbitrate(d, mambaCmd, planCmd);
+
+    moveRobot();
+    updateUI();
+  }
+
+  drawSim();
+}
+
+window.addEventListener('resize', () => { resizeCanvas(); });
+resizeCanvas();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
